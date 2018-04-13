@@ -1,11 +1,8 @@
 defmodule Gherkin.AST.Builder do
-  alias Gherkin.{AST, Location, Token}
+  alias Gherkin.{AST, Location, TableCell, TableRow, Tag, Token}
 
-  @typep cell :: %{location: Location.t(), type: :TableCell, value: String.t()}
-  @typep comment :: %{location: Location.t(), text: String.t(), type: :Comment}
+  @type comment :: %{location: Location.t(), text: String.t(), type: :Comment}
   @typep rule_type :: atom
-  @typep tag :: %{location: Location.t(), name: String.t(), type: :Tag}
-  @typep table_row :: %{cells: [cell], location: Location.t(), type: :TableRow}
 
   @spec build(Token.t()) :: AST.Node.t() | [comment]
   def build(%Token{} = token) do
@@ -88,7 +85,7 @@ defmodule Gherkin.AST.Builder do
 
   @spec transform_data_table_node(AST.Node.t()) :: %{
           optional(:location) => Location.t(),
-          optional(:rows) => [table_row],
+          optional(:rows) => [TableRow.t()],
           required(:type) => :DataTable
         }
   defp transform_data_table_node(ast_node) do
@@ -96,7 +93,7 @@ defmodule Gherkin.AST.Builder do
     reject_nils(%{location: location, rows: rows, type: :DataTable})
   end
 
-  @spec get_table_rows(AST.Node.t()) :: [table_row]
+  @spec get_table_rows(AST.Node.t()) :: [TableRow.t()]
   defp get_table_rows(ast_node) do
     tokens = AST.Node.get_children(ast_node, :TableRow)
     rows = for t <- tokens, do: %{cells: get_cells(t), location: get_location(t), type: :TableRow}
@@ -104,7 +101,7 @@ defmodule Gherkin.AST.Builder do
     rows
   end
 
-  @spec get_cells(Token.t()) :: [cell]
+  @spec get_cells(Token.t()) :: [TableCell.t()]
   defp get_cells(token) do
     for item <- Token.matched_items(token),
         do: %{
@@ -114,7 +111,7 @@ defmodule Gherkin.AST.Builder do
         }
   end
 
-  @spec ensure_cell_count([table_row]) :: :ok | no_return
+  @spec ensure_cell_count([TableRow.t()]) :: :ok | no_return
   defp ensure_cell_count([]), do: :ok
 
   defp ensure_cell_count([%{cells: cells} | rows]) do
@@ -175,7 +172,7 @@ defmodule Gherkin.AST.Builder do
           optional(:name) => String.t(),
           optional(:tableBody) => term,
           optional(:tableHeader) => term,
-          optional(:tags) => [tag],
+          optional(:tags) => [Tag.t()],
           required(:type) => :Examples_Definition
         }
   defp transform_examples_definition_node(ast_node) do
@@ -195,7 +192,7 @@ defmodule Gherkin.AST.Builder do
     })
   end
 
-  @spec get_tags(AST.Node.t()) :: [tag]
+  @spec get_tags(AST.Node.t()) :: [Tag.t()]
   defp get_tags(ast_node) do
     if tags_node = AST.Node.get_child(ast_node, :Tags) do
       for token <- AST.Node.get_children(ast_node, :TagLine),
@@ -214,8 +211,8 @@ defmodule Gherkin.AST.Builder do
   defp get_description(ast_node), do: AST.Node.get_child(ast_node, :Description)
 
   @spec transform_examples_table_node(AST.Node.t()) :: %{
-          optional(:tableBody) => [table_row],
-          optional(:tableHeader) => table_row
+          optional(:tableBody) => [TableRow.t()],
+          optional(:tableHeader) => TableRow.t()
         }
   defp transform_examples_table_node(ast_node) do
     [header | body] = get_table_rows(ast_node)
@@ -230,7 +227,7 @@ defmodule Gherkin.AST.Builder do
             optional(:language) => String.t(),
             optional(:location) => Location.t(),
             optional(:name) => String.t(),
-            optional(:tags) => [tag],
+            optional(:tags) => [Tag.t()],
             required(:type) => :Feature
           }
           | nil
@@ -281,7 +278,7 @@ defmodule Gherkin.AST.Builder do
           optional(:location) => Location.t(),
           optional(:name) => String.t(),
           optional(:steps) => list,
-          optional(:tags) => [tag]
+          optional(:tags) => [Tag.t()]
         }
   defp transform_scenario_definition_node(ast_node) do
     tags = get_tags(ast_node)
@@ -300,7 +297,10 @@ defmodule Gherkin.AST.Builder do
       })
     else
       scenario_outline_node = AST.Node.get_child(ast_node, :ScenarioOutline)
-      if !scenario_outline_node, do: raise("Internal grammar error")
+
+      if !scenario_outline_node do
+        raise "Internal grammar error"
+      end
 
       token = AST.Node.get_item(scenario_outline_node, :ScenarioOutlineLine)
       examples = AST.Node.get_children(scenario_outline_node, :Examples_Definition)
