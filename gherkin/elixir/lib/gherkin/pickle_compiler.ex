@@ -130,16 +130,19 @@ defmodule Gherkin.PickleCompiler do
         ]) :: [Pickle.argument()] | no_return
   defp create_pickle_arguments(nil, _variable_cells, _value_cells), do: []
 
-  defp create_pickle_arguments(%{type: :DataTable}, variable_cells, value_cells),
+  defp create_pickle_arguments(%{type: :DataTable} = argument, variable_cells, value_cells),
     do: [%{rows: Enum.map(argument.rows, &interpolate(&1, variable_cells, value_cells))}]
 
-  defp create_pickle_arguments(%{type: :DocString}, variable_cells, value_cells),
-    do: [
-      %{
-        content: interpolate(argument.content, variable_cells, value_cells),
-        location: argument.location
-      }
-    ]
+  defp create_pickle_arguments(%{type: :DocString} = argument, variable_cells, value_cells) do
+    pickle_argument = %{
+      content: interpolate(argument.content, variable_cells, value_cells),
+      location: argument.location
+    }
+
+    if ct = argument[:contentType],
+      do: [Map.put(pickle_argument, :contentType, interpolate(ct, variable_cells, value_cells))],
+      else: [pickle_argument]
+  end
 
   defp create_pickle_arguments(_argument, _variable_cells, _value_cells) do
     raise "Internal error"
