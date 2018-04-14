@@ -52,20 +52,32 @@ libs: ./include/rule_type.h src/parser.c src/dialect.c $(SRC_FILES) src/Makefile
 	cd src; $(MAKE) CC=$(CC) $@
 .PHONY: libs
 
+libs_so: ./include/rule_type.h src/parser.c src/dialect.c $(SRC_FILES) src/Makefile
+	cd src; $(MAKE) CC=$(CC) $@
+.PHONY: libs_so
+
 .run: cli $(GHERKIN) $(GOOD_FEATURE_FILES)
 	$(RUN_GHERKIN) $(GOOD_FEATURE_FILES) | jq . > /dev/null
-	touch .run
+	touch $@
 
 ./include/rule_type.h: gherkin.berp gherkin-c-rule-type.razor
-	mono berp/berp.exe -g gherkin.berp -t gherkin-c-rule-type.razor -o $@
+	# Some build environments (Travis) mess up timestamps
+	# so that all files have the same timestamp, causing make to think this
+	# file needs to be rebuilt when it's actually uptodate. Our travis build doesn't
+	# have mono, so we'll allow this line to fail.
+	-mono berp/berp.exe -g gherkin.berp -t gherkin-c-rule-type.razor -o $@
 	# Remove BOM
-	tail -c +4 $@ > $@.nobom
+	awk 'NR==1{sub(/^\xef\xbb\xbf/,"")}{print}' < $@ > $@.nobom
 	mv $@.nobom $@
 
 src/parser.c: gherkin.berp gherkin-c-parser.razor
-	mono berp/berp.exe -g gherkin.berp -t gherkin-c-parser.razor -o $@
+	# Some build environments (Travis) mess up timestamps
+	# so that all files have the same timestamp, causing make to think this
+	# file needs to be rebuilt when it's actually uptodate. Our travis build doesn't
+	# have mono, so we'll allow this line to fail.
+	-mono berp/berp.exe -g gherkin.berp -t gherkin-c-parser.razor -o $@
 	# Remove BOM
-	tail -c +4 $@ > $@.nobom
+	awk 'NR==1{sub(/^\xef\xbb\xbf/,"")}{print}' < $@ > $@.nobom
 	mv $@.nobom $@
 
 src/dialect.c: gherkin-languages.json dialect.c.jq
@@ -96,3 +108,4 @@ acceptance/testdata/%.feature.source.ndjson: testdata/%.feature testdata/%.featu
 	mkdir -p `dirname $@`
 	$(RUN_GHERKIN) --no-ast --no-pickles $< | jq --sort-keys --compact-output "." > $@
 	diff --unified <(jq "." $<.source.ndjson) <(jq "." $@)
+

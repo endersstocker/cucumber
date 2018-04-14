@@ -5,7 +5,6 @@ import org.junit.Test;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -15,6 +14,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 public class CucumberExpressionTest {
+
     @Test
     public void documents_match_arguments() {
         ParameterTypeRegistry parameterTypeRegistry = new ParameterTypeRegistry(Locale.ENGLISH);
@@ -52,7 +52,6 @@ public class CucumberExpressionTest {
         assertEquals(asList("blind", "crippled"), match("three {string} and {string} mice", "three 'blind' and 'crippled' mice"));
     }
 
-
     @Test
     public void does_not_match_misquoted_string() {
         assertEquals(null, match("three {string} mice", "three \"blind' mice"));
@@ -79,6 +78,11 @@ public class CucumberExpressionTest {
     }
 
     @Test
+    public void matches_escaped_parenthesis() {
+        assertEquals(singletonList("blind"), match("three \\(exceptionally) {string} mice", "three (exceptionally) \"blind\" mice"));
+    }
+
+    @Test
     public void matches_int() {
         assertEquals(singletonList(22), match("{int}", "22"));
     }
@@ -100,7 +104,7 @@ public class CucumberExpressionTest {
             match("{unknown}", "something");
             fail();
         } catch (UndefinedParameterTypeException expected) {
-            assertEquals("Undefined parameter type {unknown}", expected.getMessage());
+            assertEquals("Undefined parameter type {unknown}. Please register a ParameterType for {unknown}.", expected.getMessage());
         }
     }
 
@@ -114,7 +118,7 @@ public class CucumberExpressionTest {
 
     @Test
     public void matches_byte() {
-        assertEquals(singletonList((byte) 15), match("{byte}", "0x0F"));
+        assertEquals(singletonList(Byte.MAX_VALUE), match("{byte}", "127"));
     }
 
     @Test
@@ -128,13 +132,16 @@ public class CucumberExpressionTest {
     }
 
     @Test
-    public void matches_bigint() {
-        assertEquals(singletonList(BigInteger.ONE), match("{bigint}", BigInteger.ONE.toString()));
+    public void matches_biginteger() {
+        BigInteger bigInteger = BigInteger.valueOf(Long.MAX_VALUE);
+        bigInteger = bigInteger.pow(10);
+        assertEquals(singletonList(bigInteger), match("{biginteger}", bigInteger.toString()));
     }
 
     @Test
     public void matches_bigdecimal() {
-        assertEquals(singletonList(BigDecimal.ONE), match("{bigdecimal}", BigDecimal.ONE.toString()));
+        BigDecimal bigDecimal = BigDecimal.valueOf(Math.PI);
+        assertEquals(singletonList(bigDecimal), match("{bigdecimal}", bigDecimal.toString()));
     }
 
     @Test

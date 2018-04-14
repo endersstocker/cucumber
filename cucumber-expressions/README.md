@@ -47,7 +47,7 @@ parameter types are:
 * `{word}`, for example `banana` (but not `banana split`)
 * `{string}`, for example `"bangers"` or `'mash'`. The single/double quotes themselves are removed from the match.
 
-On the JVM, there are additional parameter types for `bigint`, `bigdecimal`,
+On the JVM, there are additional parameter types for `biginteger`, `bigdecimal`,
 `byte`, `short`, `long` and `double`.
 
 ### Custom parameter types {#custom-parameter-types}
@@ -138,6 +138,20 @@ This would match either of those texts:
 
     I have 42 cucumbers in my belly
     I have 42 cucumbers in my stomach
+
+## Escaping
+
+If you ever need to match `()` or `{}` literally, you can escape the
+opening `(` or `{` with a backslash:
+
+    I have 42 \{what} cucumber(s) in my belly \(amazing!)
+
+This expression would match the following examples:
+
+    I have 42 {what} cucumber in my belly (amazing!)
+    I have 42 {what} cucumbers in my belly (amazing!)
+
+There is currently no way to escape the `/` character.
 
 ## Step Definition Snippets (Cucumber Expression generation)
 

@@ -8,13 +8,66 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
-N/A
 
 ### Changed
-N/A
+
+* java: The `{byte}` parameter type no longer uses hexadecimal, but uses the same pattern as `{short}`, `{int}` and `{long}`.
 
 ### Deprecated
-N/A
+
+### Removed
+
+### Fixed
+
+## [5.0.17] - 2018-04-12
+
+### Changed
+
+* java: Swapped 2 parameters in a `ParameterType` constructor to make it consistent with
+  overloaded constructors.
+
+## [5.0.16] - 2018-04-12
+
+There are backwards incompatible changes in the Java implementation, but we're
+not bumping the minor version number because no released libraries are using
+it yet.
+
+### Changed
+
+* java: Renamed `{bigint}` to `{biginteger}` ([mpkorstanje, aslakhellesoy])
+* java: The API uses `Transformer` for transforms with 0-1 capture groups,
+  and `CaptureGroupTransformer` for 2+ capture groups.
+
+### Fixed
+
+* java: Better error message when users leave anchors (^ and $) in their regular expressions ([aslakhellesoy])
+* java: `{bigdecimal}` would only match integers ([mpkorstanje, aslakhellesoy])
+* java: `{byte}` is suggested in snippets ([mpkorstanje])
+
+## [5.0.15] - 2018-04-08
+
+### Added
+
+* go: Added Go implementation
+  ([#350](https://github.com/cucumber/cucumber/pull/350)
+   [charlierudolph])
+
+### Changed
+
+* java: Change the Java API
+  ([e246e7c76045f9a379cebe46e40a0f2705c9d82c](https://github.com/cucumber/cucumber-expressions-java/commit/e246e7c76045f9a379cebe46e40a0f2705c9d82c)
+   [mpkorstanje])
+
+## [5.0.14] - 2018-04-04
+
+### Added
+
+* Matching a literal open-parenthesis
+  ([#107](https://github.com/cucumber/cucumber/issues/107)
+   [#333](https://github.com/cucumber/cucumber/issues/333)
+   [#334](https://github.com/cucumber/cucumber/pull/334)
+   [jamis])
+* Matching a literal left curly brace [aslakhellesoy]
 
 ### Removed
 * ruby: Support for named capture group in `Regexp`
@@ -22,7 +75,9 @@ N/A
    [aslakhellesoy])
 
 ### Fixed
-N/A
+* Generated expressions escape `(` and `{` if they were present in the text.
+  ([#345](https://github.com/cucumber/cucumber/issues/345)
+  [aslakhellesoy])
 
 ## [5.0.13] - 2018-01-21
 
@@ -314,7 +369,11 @@ N/A
 * First stable release!
 
 <!-- Releases -->
-[Unreleased]: https://github.com/cucumber/cucumber/compare/cucumber-expressions-v5.0.13...master
+[Unreleased]: https://github.com/cucumber/cucumber/compare/cucumber-expressions-v5.0.16...master
+[5.0.17]:     https://github.com/cucumber/cucumber/compare/cucumber-expressions-v5.0.16...cucumber-expressions-v5.0.17
+[5.0.16]:     https://github.com/cucumber/cucumber/compare/cucumber-expressions-v5.0.15...cucumber-expressions-v5.0.16
+[5.0.15]:     https://github.com/cucumber/cucumber/compare/cucumber-expressions-v5.0.14...cucumber-expressions-v5.0.15
+[5.0.14]:     https://github.com/cucumber/cucumber/compare/cucumber-expressions-v5.0.13...cucumber-expressions-v5.0.14
 [5.0.13]:     https://github.com/cucumber/cucumber/compare/cucumber-expressions-v5.0.12...cucumber-expressions-v5.0.13
 [5.0.12]:     https://github.com/cucumber/cucumber/compare/cucumber-expressions-v5.0.11...cucumber-expressions-v5.0.12
 [5.0.11]:     https://github.com/cucumber/cucumber/compare/cucumber-expressions-v5.0.10...cucumber-expressions-v5.0.11
@@ -345,6 +404,7 @@ N/A
 [charlierudolph]:   https://github.com/charlierudolph
 [dmeehan1968]:      https://github.com/dmeehan1968
 [gpichot]:          https://github.com/gpichot
+[jamis]:            https://github.com/jamis
 [jaysonesmith]:     https://github.com/jaysonesmith
 [luke-hill]:        https://github.com/luke-hill
 [mpkorstanje]:      https://github.com/mpkorstanje
