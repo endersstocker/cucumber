@@ -6,11 +6,11 @@ defmodule Gherkin.AST.Builder do
 
   @spec build(Token.t()) :: AST.Node.t() | [comment]
   def build(%Token{} = token) do
-    if Token.matched_type(token) === :Comment do
+    if token.matched_type === :Comment do
       Agent.get_and_update(__MODULE__, fn state ->
         comment = %{
           location: get_location(token),
-          text: Token.matched_text(token),
+          text: token.matched_text,
           type: :Comment
         }
 
@@ -19,7 +19,7 @@ defmodule Gherkin.AST.Builder do
       end)
     else
       Agent.get(__MODULE__, fn %{stack: [current_node | _]} ->
-        AST.Node.add_child(current_node, Token.matched_type(token), token)
+        AST.Node.add_child(current_node, token.matched_type, token)
         current_node
       end)
     end
@@ -72,9 +72,9 @@ defmodule Gherkin.AST.Builder do
 
     reject_nils(%{
       description: get_description(ast_node),
-      keyword: Token.matched_keyword(token),
+      keyword: token.matched_keyword,
       location: get_location(token),
-      name: Token.matched_text(token),
+      name: token.matched_text,
       steps: get_steps(ast_node),
       type: :Background
     })
@@ -103,7 +103,7 @@ defmodule Gherkin.AST.Builder do
 
   @spec get_cells(Token.t()) :: [TableCell.t()]
   defp get_cells(token) do
-    for item <- Token.matched_items(token),
+    for item <- token.matched_items,
         do: %{
           location: get_location(token, item.column),
           type: :TableCell,
@@ -130,8 +130,8 @@ defmodule Gherkin.AST.Builder do
   defp transform_description_node(ast_node) do
     ast_node
     |> AST.Node.get_children(:Other)
-    |> Stream.take_while(&(&(Token.line(&1).trimmed_line_text !== "")))
-    |> Enum.map_join("\n", &Token.matched_text/1)
+    |> Stream.take_while(&(&1.line.trimmed_line_text !== ""))
+    |> Enum.map_join("\n", & &1.matched_text)
   end
 
   @spec transform_doc_string_node(AST.Node.t()) :: %{
@@ -146,16 +146,11 @@ defmodule Gherkin.AST.Builder do
     content =
       ast_node
       |> AST.Node.get_children(:Other)
-      |> Enum.map_join("\n", &Token.matched_text/1)
-
-    content_type =
-      token
-      |> Token.matched_text()
-      |> scrub()
+      |> Enum.map_join("\n", & &1.matched_text)
 
     reject_nils(%{
       content: content,
-      content_type: content_type,
+      content_type: scrub(token.matched_text),
       location: get_location(token),
       type: :DocString
     })
@@ -182,9 +177,9 @@ defmodule Gherkin.AST.Builder do
 
     reject_nils(%{
       description: get_description(examples_node),
-      keyword: Token.matched_keyword(token),
+      keyword: token.matched_keyword,
       location: get_location(token),
-      name: Token.matched_text(token),
+      name: token.matched_text,
       tableBody: examples_table_node && examples_table_node.tableBody,
       tableHeader: examples_table_node && examples_table_node.tableHeader,
       tags: get_tags(ast_node),
@@ -196,7 +191,7 @@ defmodule Gherkin.AST.Builder do
   defp get_tags(ast_node) do
     if tags_node = AST.Node.get_child(ast_node, :Tags) do
       for token <- AST.Node.get_children(ast_node, :TagLine),
-          tag_item <- Token.matched_items(token),
+          tag_item <- token.matched_items,
           do: %{
             location: get_location(token, tag_item.column),
             name: tag_item.text,
@@ -246,10 +241,10 @@ defmodule Gherkin.AST.Builder do
         reject_nils(%{
           children: children,
           description: get_description(feature_header_node),
-          keyword: Token.matched_keyword(token),
-          language: Token.matched_gherkin_dialect(token),
+          keyword: token.matched_keyword,
+          language: token.matched_gherkin_dialect,
           location: get_location(token),
-          name: Token.matched_text(token),
+          name: token.matched_text,
           tags: get_tags(feature_header_node),
           type: :Feature
         })
@@ -288,9 +283,9 @@ defmodule Gherkin.AST.Builder do
 
       reject_nils(%{
         description: get_description(scenario_node),
-        keyword: Token.matched_keyword(token),
+        keyword: token.matched_keyword,
         location: get_location(token),
-        name: Token.matched_text(token),
+        name: token.matched_text,
         steps: get_steps(scenario_node),
         tags: tags,
         type: AST.Node.rule_type(scenario_node)
@@ -308,9 +303,9 @@ defmodule Gherkin.AST.Builder do
       reject_nils(%{
         description: get_description(scenario_outline_node),
         examples: examples,
-        keyword: Token.matched_keyword(token),
+        keyword: token.matched_keyword,
         location: get_location(token),
-        name: Token.matched_text(token),
+        name: token.matched_text,
         steps: get_steps(scenario_outline_node),
         tags: tags,
         type: AST.Node.rule_type(scenario_outline_node)
@@ -333,17 +328,17 @@ defmodule Gherkin.AST.Builder do
 
     reject_nils(%{
       argument: argument,
-      keyword: Token.matched_keyword(token),
+      keyword: token.matched_keyword,
       location: get_location(token),
-      text: Token.matched_text(token),
+      text: token.matched_text,
       type: :Step
     })
   end
 
   @spec get_location(Token.t(), non_neg_integer) :: Location.t()
   defp get_location(token, column \\ 0)
-  defp get_location(token, 0), do: Token.location(token)
-  defp get_location(token, column), do: %{Token.location(token) | column: column}
+  defp get_location(%{location: location}, 0), do: location
+  defp get_location(%{location: location}, column), do: %{location | column: column}
 
   @spec reject_nils(map) :: map
   defp reject_nils(map) do

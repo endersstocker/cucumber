@@ -23,14 +23,14 @@ defmodule Gherkin.GherkinLine do
 
   def get_line_text(%__MODULE__{line_text: line_text}, indent_to_remove)
       when is_integer(indent_to_remove),
-      do: String.slice(line_text, indent_to_remove..-1)
+      do: binary_part(line_text, indent_to_remove, -1)
 
   @spec get_rest_trimmed(t, non_neg_integer) :: String.t()
   def get_rest_trimmed(%__MODULE__{trimmed_line_text: trimmed_line_text}, length)
       when is_integer(length) and length >= 0,
       do:
         trimmed_line_text
-        |> String.slice(length..-1)
+        |> binary_part(length, -1)
         |> String.trim()
 
   @spec new(String.t(), pos_integer) :: t
