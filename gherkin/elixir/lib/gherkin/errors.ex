@@ -54,7 +54,7 @@ defmodule Gherkin.UnexpectedEOFError do
 
     exception
     |> Map.fetch!(:received_token)
-    |> Token.location()
+    |> Map.fetch!(:location)
     |> ErrorMessage.new("unexpected end of file, expected: #{expected}")
   end
 end
@@ -84,11 +84,9 @@ defmodule Gherkin.UnexpectedTokenError do
   end
 
   @spec location(Token.t()) :: Location.t()
-  defp location(token) do
-    location = Token.location(received_token)
-
-    if location.column and location.column > 0,
-      do: location,
-      else: %{location | column: Token.line(received_token).indent + 1}
+  defp location(%{line: line, location: token_location}) do
+    if token_location.column and token_location.column > 0,
+      do: token_location,
+      else: %{token_location | column: line.indent + 1}
   end
 end
