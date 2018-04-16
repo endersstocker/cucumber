@@ -12,7 +12,7 @@ defmodule Gherkin.SourceEvent do
   defstruct @enforce_keys
 
   @spec stream([Path.t()]) :: Enumerable.t()
-  def stream(paths), do: Stream.map(paths, &event/1)
+  def stream(paths) when is_list(paths), do: Stream.map(paths, &event/1)
 
   @spec event(Path.t()) :: t
   defp event(path),
