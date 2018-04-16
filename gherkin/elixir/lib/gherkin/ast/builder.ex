@@ -1,43 +1,35 @@
 defmodule Gherkin.AST.Builder do
   alias Gherkin.{AST, Location, TableCell, TableRow, Tag, Token}
 
-  @type comment :: %{location: Location.t(), text: String.t(), type: :Comment}
-  @typep rule_type :: atom
+  @type t :: %__MODULE__{comments: [comment], stack: [AST.Node.t(), ...]}
 
-  @spec build(Token.t()) :: AST.Node.t() | [comment]
-  def build(%Token{} = token) do
+  @typep comment :: %{location: Location.t(), text: String.t(), type: :Comment}
+
+  defstruct comments: [], stack: [%AST.Node{rule_type: :None}]
+
+  @spec build(t, Token.t()) :: t
+  def build(%__MODULE__{} = builder, %Token{} = token) do
     if token.matched_type === :Comment do
-      Agent.get_and_update(__MODULE__, fn state ->
-        comment = %{
-          location: get_location(token),
-          text: token.matched_text,
-          type: :Comment
-        }
-
-        comments = List.insert_at(state.comments, -1, comment)
-        {comments, %{state | comments: comments}}
-      end)
+      comment = %{location: get_location(token), text: token.matched_text, type: :Comment}
+      %{builder | comments: [comment | builder.comments]}
     else
-      Agent.get_and_update(__MODULE__, fn state ->
-        [node | stack] = state.stack
-        current_node = AST.Node.add_child(node, token.matched_type, token)
-        {current_node, %{state | stack: [current_node | stack]}}
-      end)
+      [node | stack] = builder.stack
+      new_node = AST.Node.add_child(node, token.matched_type, token)
+      %{builder | stack: [new_node | stack]}
     end
   end
 
-  @spec end_rule(rule_type) :: :ok
-  def end_rule(rule_type) when is_atom(rule_type),
-    do:
-      Agent.update(__MODULE__, fn state ->
-        [node1, node2 | stack] = state.stack
-        current_node = AST.Node.add_child(node2, node1.rule_type, transform_node(node1))
-        %{state | stack: [current_node | stack]}
-      end)
+  @spec end_rule(t, AST.Node.rule_type()) :: t
+  def end_rule(%__MODULE__{} = builder, rule_type) when is_atom(rule_type) do
+    [node1, node2 | stack] = builder.stack
+    comments = :lists.reverse(builder.comments)
+    new_node = AST.Node.add_child(node2, node1.rule_type, transform_node(node1, comments))
+    %{builder | stack: [new_node | stack]}
+  end
 
-  @spec transform_node(AST.Node.t()) ::
+  @spec transform_node(AST.Node.t(), [comment]) ::
           %{required(:type) => atom, optional(atom) => term} | AST.Node.t() | nil
-  defp transform_node(ast_node) do
+  defp transform_node(ast_node, comments) do
     case ast_node.rule_type do
       :Background -> transform_background_node(ast_node)
       :DataTable -> transform_data_table_node(ast_node)
@@ -46,7 +38,7 @@ defmodule Gherkin.AST.Builder do
       :Examples_Definition -> transform_examples_definition_node(ast_node)
       :Examples_Table -> transform_examples_table_node(ast_node)
       :Feature -> transform_feature_node(ast_node)
-      :GherkinDocument -> transform_gherkin_document_node(ast_node)
+      :GherkinDocument -> transform_gherkin_document_node(ast_node, comments)
       :Scenario_Definition -> transform_scenario_definition_node(ast_node)
       :Step -> transform_step_node(ast_node)
       _ -> ast_node
@@ -54,12 +46,12 @@ defmodule Gherkin.AST.Builder do
   end
 
   @spec transform_background_node(AST.Node.t()) :: %{
+          required(:type) => :Background,
           optional(:description) => String.t(),
           optional(:keyword) => String.t(),
           optional(:location) => Location.t(),
           optional(:name) => String.t(),
-          optional(:steps) => list,
-          required(:type) => :Background
+          optional(:steps) => list
         }
   defp transform_background_node(ast_node) do
     token = AST.Node.get_item(ast_node, :BackgroundLine)
@@ -78,9 +70,9 @@ defmodule Gherkin.AST.Builder do
   defp get_steps(ast_node), do: AST.Node.get_children(ast_node, :Step)
 
   @spec transform_data_table_node(AST.Node.t()) :: %{
+          required(:type) => :DataTable,
           optional(:location) => Location.t(),
-          optional(:rows) => [TableRow.t()],
-          required(:type) => :DataTable
+          optional(:rows) => [TableRow.t()]
         }
   defp transform_data_table_node(ast_node) do
     [%{location: location} | _] = rows = get_table_rows(node)
@@ -129,10 +121,10 @@ defmodule Gherkin.AST.Builder do
   end
 
   @spec transform_doc_string_node(AST.Node.t()) :: %{
+          required(:type) => :DocString,
           optional(:content) => String.t(),
           optional(:content_type) => String.t(),
-          optional(:location) => Location.t(),
-          required(:type) => :DocString
+          optional(:location) => Location.t()
         }
   defp transform_doc_string_node(ast_node) do
     token = AST.Node.get_item(ast_node, :DocStringSeparator)
@@ -155,14 +147,14 @@ defmodule Gherkin.AST.Builder do
   defp scrub(string) when is_binary(string), do: string
 
   @spec transform_examples_definition_node(AST.Node.t()) :: %{
+          required(:type) => :Examples_Definition,
           optional(:description) => String.t(),
           optional(:keyword) => String.t(),
           optional(:location) => Location.t(),
           optional(:name) => String.t(),
           optional(:tableBody) => term,
           optional(:tableHeader) => term,
-          optional(:tags) => [Tag.t()],
-          required(:type) => :Examples_Definition
+          optional(:tags) => [Tag.t()]
         }
   defp transform_examples_definition_node(ast_node) do
     examples_node = AST.Node.get_child(ast_node, :Examples)
@@ -210,14 +202,14 @@ defmodule Gherkin.AST.Builder do
 
   @spec transform_feature_node(AST.Node.t()) ::
           %{
+            required(:type) => :Feature,
             optional(:children) => list,
             optional(:description) => String.t(),
             optional(:keyword) => String.t(),
             optional(:language) => String.t(),
             optional(:location) => Location.t(),
             optional(:name) => String.t(),
-            optional(:tags) => [Tag.t()],
-            required(:type) => :Feature
+            optional(:tags) => [Tag.t()]
           }
           | nil
   defp transform_feature_node(ast_node) do
@@ -246,15 +238,15 @@ defmodule Gherkin.AST.Builder do
     end
   end
 
-  @spec transform_gherkin_document_node(AST.Node.t()) :: %{
+  @spec transform_gherkin_document_node(AST.Node.t(), [comment]) :: %{
+          required(:type) => :GherkinDocument,
           optional(:comments) => [comment],
-          optional(:feature) => AST.Node.t(),
-          required(:type) => :GherkinDocument
+          optional(:feature) => AST.Node.t()
         }
-  defp transform_gherkin_document_node(ast_node),
+  defp transform_gherkin_document_node(ast_node, comments),
     do:
       reject_nils(%{
-        comments: Agent.get(__MODULE__, & &1.comments),
+        comments: comments,
         feature: AST.Node.get_child(ast_node, :Feature),
         type: :GherkinDocument
       })
@@ -339,32 +331,15 @@ defmodule Gherkin.AST.Builder do
     for {k, v} <- map, v !== nil, into: %{}, do: {k, v}
   end
 
-  @spec get_result :: AST.Node.t()
-  def get_result,
+  @spec get_result(t) :: AST.Node.t()
+  def get_result(%__MODULE__{} = builder),
     do:
-      Agent.get(__MODULE__, fn %{stack: [current_node | _]} ->
-        AST.Node.get_child(current_node, :GherkinDocument)
-      end)
+      builder
+      |> Map.fetch!(:stack)
+      |> hd()
+      |> AST.Node.get_child(:GherkinDocument)
 
-  @spec reset :: :ok
-  def reset, do: Agent.update(__MODULE__, fn _ -> initialize() end)
-
-  @spec start_link :: :ok | {:error, :already_started | term}
-  def start_link do
-    case Agent.start_link(&initialize/0, name: __MODULE__) do
-      {:ok, _} -> :ok
-      {:error, {:already_started, _}} -> {:error, :already_started}
-      {:error, error} -> {:error, error}
-    end
-  end
-
-  @spec initialize :: %{comments: [], stack: [AST.Node.t()]}
-  defp initialize, do: %{comments: [], stack: [%AST.Node{rule_type: :None}]}
-
-  @spec start_rule(rule_type) :: :ok
-  def start_rule(rule_type) when is_atom(rule_type),
-    do:
-      Agent.update(__MODULE__, fn state ->
-        %{state | stack: [%AST.Node{rule_type: rule_type} | state.stack]}
-      end)
+  @spec start_rule(t, AST.Node.rule_type()) :: t
+  def start_rule(%__MODULE__{} = builder, rule_type) when is_atom(rule_type),
+    do: %{builder | stack: [%AST.Node{rule_type: rule_type} | builder.stack]}
 end
