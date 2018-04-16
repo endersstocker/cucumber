@@ -18,9 +18,10 @@ defmodule Gherkin.AST.Builder do
         {comments, %{state | comments: comments}}
       end)
     else
-      Agent.get(__MODULE__, fn %{stack: [current_node | _]} ->
-        AST.Node.add_child(current_node, token.matched_type, token)
-        current_node
+      Agent.get_and_update(__MODULE__, fn state ->
+        [node | stack] = state.stack
+        current_node = AST.Node.add_child(node, token.matched_type, token)
+        {current_node, %{state | stack: [current_node | stack]}}
       end)
     end
   end
@@ -29,22 +30,15 @@ defmodule Gherkin.AST.Builder do
   def end_rule(rule_type) when is_atom(rule_type),
     do:
       Agent.update(__MODULE__, fn state ->
-        [old_node | stack] = state.stack
-        rule_type = AST.Node.rule_type(old_node)
-        child = transform_node(old_node)
-
-        stack
-        |> hd()
-        |> AST.Node.add_child(rule_type, child)
-
-        AST.Node.stop(old_node)
-        %{state | stack: stack}
+        [node1, node2 | stack] = state.stack
+        current_node = AST.Node.add_child(node2, node1.rule_type, transform_node(node1))
+        %{state | stack: [current_node | stack]}
       end)
 
   @spec transform_node(AST.Node.t()) ::
           %{required(:type) => atom, optional(atom) => term} | AST.Node.t() | nil
   defp transform_node(ast_node) do
-    case AST.Node.rule_type(ast_node) do
+    case ast_node.rule_type do
       :Background -> transform_background_node(ast_node)
       :DataTable -> transform_data_table_node(ast_node)
       :Description -> transform_description_node(ast_node)
@@ -183,7 +177,7 @@ defmodule Gherkin.AST.Builder do
       tableBody: examples_table_node && examples_table_node.tableBody,
       tableHeader: examples_table_node && examples_table_node.tableHeader,
       tags: get_tags(ast_node),
-      type: AST.Node.rule_type(examples_node)
+      type: examples_node.rule_type
     })
   end
 
@@ -288,7 +282,7 @@ defmodule Gherkin.AST.Builder do
         name: token.matched_text,
         steps: get_steps(scenario_node),
         tags: tags,
-        type: AST.Node.rule_type(scenario_node)
+        type: scenario_node.rule_type
       })
     else
       scenario_outline_node = AST.Node.get_child(ast_node, :ScenarioOutline)
@@ -308,7 +302,7 @@ defmodule Gherkin.AST.Builder do
         name: token.matched_text,
         steps: get_steps(scenario_outline_node),
         tags: tags,
-        type: AST.Node.rule_type(scenario_outline_node)
+        type: scenario_outline_node.rule_type
       })
     end
   end
@@ -353,12 +347,7 @@ defmodule Gherkin.AST.Builder do
       end)
 
   @spec reset :: :ok
-  def reset,
-    do:
-      Agent.update(__MODULE__, fn state ->
-        for ast_node <- state.stack, do: AST.Node.stop(ast_node)
-        initialize()
-      end)
+  def reset, do: Agent.update(__MODULE__, fn _ -> initialize() end)
 
   @spec start_link :: :ok | {:error, :already_started | term}
   def start_link do
@@ -369,17 +358,13 @@ defmodule Gherkin.AST.Builder do
     end
   end
 
-  @spec initialize :: %{comments: [comment], stack: [AST.Node.t()]}
-  defp initialize do
-    {:ok, ast_node} = AST.Node.start_link(:None)
-    %{comments: [], stack: [ast_node]}
-  end
+  @spec initialize :: %{comments: [], stack: [AST.Node.t()]}
+  defp initialize, do: %{comments: [], stack: [%AST.Node{rule_type: :None}]}
 
   @spec start_rule(rule_type) :: :ok
   def start_rule(rule_type) when is_atom(rule_type),
     do:
       Agent.update(__MODULE__, fn state ->
-        {:ok, ast_node} = AST.Node.start_link(rule_type)
-        %{state | stack: [ast_node | state.stack]}
+        %{state | stack: [%AST.Node{rule_type: rule_type} | state.stack]}
       end)
 end
