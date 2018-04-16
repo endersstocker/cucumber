@@ -8,7 +8,7 @@ defmodule Gherkin.ErrorMessage do
     do: "(#{location.line}:#{location.column || 0}): #{message}"
 end
 
-defmodule Gherkin.AST.BuilderError do
+defmodule Gherkin.ASTBuilderError do
   alias Gherkin.ErrorMessage
 
   defexception [:location, :message]

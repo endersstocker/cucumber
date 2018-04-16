@@ -1,4 +1,4 @@
-defmodule Gherkin.AST.Node do
+defmodule Gherkin.ASTNode do
   @type rule_type ::
           :Background
           | :DataTable

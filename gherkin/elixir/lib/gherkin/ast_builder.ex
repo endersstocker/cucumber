@@ -1,34 +1,36 @@
-defmodule Gherkin.AST.Builder do
-  alias Gherkin.{AST, Location, TableCell, TableRow, Tag, Token}
+defmodule Gherkin.ASTBuilder do
+  alias Gherkin.{ASTNode, Builder, Location, TableCell, TableRow, Tag, Token}
 
-  @type t :: %__MODULE__{comments: [comment], stack: [AST.Node.t(), ...]}
+  @behaviour Builder
+
+  @type t :: %__MODULE__{comments: [comment], stack: [ASTNode.t(), ...]}
 
   @typep comment :: %{location: Location.t(), text: String.t(), type: :Comment}
 
-  defstruct comments: [], stack: [%AST.Node{rule_type: :None}]
+  defstruct comments: [], stack: [%ASTNode{rule_type: :None}]
 
-  @spec build(t, Token.t()) :: t
+  @impl Builder
   def build(%__MODULE__{} = builder, %Token{} = token) do
     if token.matched_type === :Comment do
       comment = %{location: get_location(token), text: token.matched_text, type: :Comment}
       %{builder | comments: [comment | builder.comments]}
     else
-      [node | stack] = builder.stack
-      new_node = AST.Node.add_child(node, token.matched_type, token)
+      [current_node | stack] = builder.stack
+      new_node = ASTNode.add_child(current_node, token.matched_type, token)
       %{builder | stack: [new_node | stack]}
     end
   end
 
-  @spec end_rule(t, AST.Node.rule_type()) :: t
+  @impl Builder
   def end_rule(%__MODULE__{} = builder, rule_type) when is_atom(rule_type) do
     [node1, node2 | stack] = builder.stack
     comments = :lists.reverse(builder.comments)
-    new_node = AST.Node.add_child(node2, node1.rule_type, transform_node(node1, comments))
+    new_node = ASTNode.add_child(node2, node1.rule_type, transform_node(node1, comments))
     %{builder | stack: [new_node | stack]}
   end
 
-  @spec transform_node(AST.Node.t(), [comment]) ::
-          %{required(:type) => atom, optional(atom) => term} | AST.Node.t() | nil
+  @spec transform_node(ASTNode.t(), [comment]) ::
+          %{required(:type) => atom, optional(atom) => term} | ASTNode.t() | nil
   defp transform_node(ast_node, comments) do
     case ast_node.rule_type do
       :Background -> transform_background_node(ast_node)
@@ -45,7 +47,7 @@ defmodule Gherkin.AST.Builder do
     end
   end
 
-  @spec transform_background_node(AST.Node.t()) :: %{
+  @spec transform_background_node(ASTNode.t()) :: %{
           required(:type) => :Background,
           optional(:description) => String.t(),
           optional(:keyword) => String.t(),
@@ -54,7 +56,7 @@ defmodule Gherkin.AST.Builder do
           optional(:steps) => list
         }
   defp transform_background_node(ast_node) do
-    token = AST.Node.get_item(ast_node, :BackgroundLine)
+    token = ASTNode.get_item(ast_node, :BackgroundLine)
 
     reject_nils(%{
       description: get_description(ast_node),
@@ -66,10 +68,10 @@ defmodule Gherkin.AST.Builder do
     })
   end
 
-  @spec get_steps(AST.Node.t()) :: list
-  defp get_steps(ast_node), do: AST.Node.get_children(ast_node, :Step)
+  @spec get_steps(ASTNode.t()) :: list
+  defp get_steps(ast_node), do: ASTNode.get_children(ast_node, :Step)
 
-  @spec transform_data_table_node(AST.Node.t()) :: %{
+  @spec transform_data_table_node(ASTNode.t()) :: %{
           required(:type) => :DataTable,
           optional(:location) => Location.t(),
           optional(:rows) => [TableRow.t()]
@@ -79,9 +81,9 @@ defmodule Gherkin.AST.Builder do
     reject_nils(%{location: location, rows: rows, type: :DataTable})
   end
 
-  @spec get_table_rows(AST.Node.t()) :: [TableRow.t()]
+  @spec get_table_rows(ASTNode.t()) :: [TableRow.t()]
   defp get_table_rows(ast_node) do
-    tokens = AST.Node.get_children(ast_node, :TableRow)
+    tokens = ASTNode.get_children(ast_node, :TableRow)
     rows = for t <- tokens, do: %{cells: get_cells(t), location: get_location(t), type: :TableRow}
     ensure_cell_count(rows)
     rows
@@ -105,33 +107,33 @@ defmodule Gherkin.AST.Builder do
 
     Enum.each(rows, fn row ->
       if length(row.cells) !== cell_count do
-        raise AST.BuilderError,
+        raise ASTBuilderError,
           location: row.location,
           message: "inconsistent cell count within the table"
       end
     end)
   end
 
-  @spec transform_description_node(AST.Node.t()) :: String.t()
+  @spec transform_description_node(ASTNode.t()) :: String.t()
   defp transform_description_node(ast_node) do
     ast_node
-    |> AST.Node.get_children(:Other)
+    |> ASTNode.get_children(:Other)
     |> Stream.take_while(&(&1.line.trimmed_line_text !== ""))
     |> Enum.map_join("\n", & &1.matched_text)
   end
 
-  @spec transform_doc_string_node(AST.Node.t()) :: %{
+  @spec transform_doc_string_node(ASTNode.t()) :: %{
           required(:type) => :DocString,
           optional(:content) => String.t(),
           optional(:content_type) => String.t(),
           optional(:location) => Location.t()
         }
   defp transform_doc_string_node(ast_node) do
-    token = AST.Node.get_item(ast_node, :DocStringSeparator)
+    token = ASTNode.get_item(ast_node, :DocStringSeparator)
 
     content =
       ast_node
-      |> AST.Node.get_children(:Other)
+      |> ASTNode.get_children(:Other)
       |> Enum.map_join("\n", & &1.matched_text)
 
     reject_nils(%{
@@ -146,7 +148,7 @@ defmodule Gherkin.AST.Builder do
   defp scrub(""), do: nil
   defp scrub(string) when is_binary(string), do: string
 
-  @spec transform_examples_definition_node(AST.Node.t()) :: %{
+  @spec transform_examples_definition_node(ASTNode.t()) :: %{
           required(:type) => :Examples_Definition,
           optional(:description) => String.t(),
           optional(:keyword) => String.t(),
@@ -157,9 +159,9 @@ defmodule Gherkin.AST.Builder do
           optional(:tags) => [Tag.t()]
         }
   defp transform_examples_definition_node(ast_node) do
-    examples_node = AST.Node.get_child(ast_node, :Examples)
-    token = AST.Node.get_item(examples_node, :ExampleLine)
-    examples_table_node = AST.Node.get_child(examples_node, :Examples_Table)
+    examples_node = ASTNode.get_child(ast_node, :Examples)
+    token = ASTNode.get_item(examples_node, :ExampleLine)
+    examples_table_node = ASTNode.get_child(examples_node, :Examples_Table)
 
     reject_nils(%{
       description: get_description(examples_node),
@@ -173,10 +175,10 @@ defmodule Gherkin.AST.Builder do
     })
   end
 
-  @spec get_tags(AST.Node.t()) :: [Tag.t()]
+  @spec get_tags(ASTNode.t()) :: [Tag.t()]
   defp get_tags(ast_node) do
-    if tags_node = AST.Node.get_child(ast_node, :Tags) do
-      for token <- AST.Node.get_children(ast_node, :TagLine),
+    if tags_node = ASTNode.get_child(ast_node, :Tags) do
+      for token <- ASTNode.get_children(ast_node, :TagLine),
           tag_item <- token.matched_items,
           do: %{
             location: get_location(token, tag_item.column),
@@ -188,10 +190,10 @@ defmodule Gherkin.AST.Builder do
     end
   end
 
-  @spec get_description(AST.Node.t()) :: String.t() | nil
-  defp get_description(ast_node), do: AST.Node.get_child(ast_node, :Description)
+  @spec get_description(ASTNode.t()) :: String.t() | nil
+  defp get_description(ast_node), do: ASTNode.get_child(ast_node, :Description)
 
-  @spec transform_examples_table_node(AST.Node.t()) :: %{
+  @spec transform_examples_table_node(ASTNode.t()) :: %{
           optional(:tableBody) => [TableRow.t()],
           optional(:tableHeader) => TableRow.t()
         }
@@ -200,7 +202,7 @@ defmodule Gherkin.AST.Builder do
     reject_nils(%{tableBody: body, tableHeader: header})
   end
 
-  @spec transform_feature_node(AST.Node.t()) ::
+  @spec transform_feature_node(ASTNode.t()) ::
           %{
             required(:type) => :Feature,
             optional(:children) => list,
@@ -213,12 +215,12 @@ defmodule Gherkin.AST.Builder do
           }
           | nil
   defp transform_feature_node(ast_node) do
-    if feature_header_node = AST.Node.get_child(ast_node, :Feature_Header) do
-      if token = AST.Node.get_item(feature_header_node, :FeatureLine) do
-        scenario = AST.Node.get_children(ast_node, :Scenario_Definition)
+    if feature_header_node = ASTNode.get_child(ast_node, :Feature_Header) do
+      if token = ASTNode.get_item(feature_header_node, :FeatureLine) do
+        scenario = ASTNode.get_children(ast_node, :Scenario_Definition)
 
         children =
-          if background_node = AST.Node.get_child(ast_node, :Background) do
+          if background_node = ASTNode.get_child(ast_node, :Background) do
             [background_node | scenario]
           else
             scenario
@@ -238,20 +240,20 @@ defmodule Gherkin.AST.Builder do
     end
   end
 
-  @spec transform_gherkin_document_node(AST.Node.t(), [comment]) :: %{
+  @spec transform_gherkin_document_node(ASTNode.t(), [comment]) :: %{
           required(:type) => :GherkinDocument,
           optional(:comments) => [comment],
-          optional(:feature) => AST.Node.t()
+          optional(:feature) => ASTNode.t()
         }
   defp transform_gherkin_document_node(ast_node, comments),
     do:
       reject_nils(%{
         comments: comments,
-        feature: AST.Node.get_child(ast_node, :Feature),
+        feature: ASTNode.get_child(ast_node, :Feature),
         type: :GherkinDocument
       })
 
-  @spec transform_scenario_definition_node(AST.Node.t()) :: %{
+  @spec transform_scenario_definition_node(ASTNode.t()) :: %{
           required(:type) => atom,
           optional(:description) => String.t(),
           optional(:examples) => list,
@@ -264,8 +266,8 @@ defmodule Gherkin.AST.Builder do
   defp transform_scenario_definition_node(ast_node) do
     tags = get_tags(ast_node)
 
-    if scenario_node = AST.Node.get_child(ast_node, :Scenario) do
-      token = AST.Node.get_item(scenario_node, :ScenarioLine)
+    if scenario_node = ASTNode.get_child(ast_node, :Scenario) do
+      token = ASTNode.get_item(scenario_node, :ScenarioLine)
 
       reject_nils(%{
         description: get_description(scenario_node),
@@ -277,14 +279,14 @@ defmodule Gherkin.AST.Builder do
         type: scenario_node.rule_type
       })
     else
-      scenario_outline_node = AST.Node.get_child(ast_node, :ScenarioOutline)
+      scenario_outline_node = ASTNode.get_child(ast_node, :ScenarioOutline)
 
       if !scenario_outline_node do
         raise "Internal grammar error"
       end
 
-      token = AST.Node.get_item(scenario_outline_node, :ScenarioOutlineLine)
-      examples = AST.Node.get_children(scenario_outline_node, :Examples_Definition)
+      token = ASTNode.get_item(scenario_outline_node, :ScenarioOutlineLine)
+      examples = ASTNode.get_children(scenario_outline_node, :Examples_Definition)
 
       reject_nils(%{
         description: get_description(scenario_outline_node),
@@ -299,7 +301,7 @@ defmodule Gherkin.AST.Builder do
     end
   end
 
-  @spec transform_step_node(AST.Node.t()) :: %{
+  @spec transform_step_node(ASTNode.t()) :: %{
           required(:type) => :Step,
           optional(:argument) => term,
           optional(:keyword) => String.t(),
@@ -307,10 +309,9 @@ defmodule Gherkin.AST.Builder do
           optional(:text) => String.t()
         }
   defp transform_step_node(ast_node) do
-    argument =
-      AST.Node.get_child(ast_node, :DataTable) || AST.Node.get_child(ast_node, :DocString)
+    argument = ASTNode.get_child(ast_node, :DataTable) || ASTNode.get_child(ast_node, :DocString)
 
-    token = AST.Node.get_item(ast_node, :StepLine)
+    token = ASTNode.get_item(ast_node, :StepLine)
 
     reject_nils(%{
       argument: argument,
@@ -331,15 +332,11 @@ defmodule Gherkin.AST.Builder do
     for {k, v} <- map, v !== nil, into: %{}, do: {k, v}
   end
 
-  @spec get_result(t) :: AST.Node.t()
-  def get_result(%__MODULE__{} = builder),
-    do:
-      builder
-      |> Map.fetch!(:stack)
-      |> hd()
-      |> AST.Node.get_child(:GherkinDocument)
+  @impl Builder
+  def get_result(%__MODULE__{stack: [current_node | _]}),
+    do: ASTNode.get_child(current_node, :GherkinDocument)
 
-  @spec start_rule(t, AST.Node.rule_type()) :: t
+  @impl Builder
   def start_rule(%__MODULE__{} = builder, rule_type) when is_atom(rule_type),
-    do: %{builder | stack: [%AST.Node{rule_type: rule_type} | builder.stack]}
+    do: %{builder | stack: [%ASTNode{rule_type: rule_type} | builder.stack]}
 end
