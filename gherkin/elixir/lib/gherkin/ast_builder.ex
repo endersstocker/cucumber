@@ -220,11 +220,9 @@ defmodule Gherkin.ASTBuilder do
         scenario = ASTNode.get_children(ast_node, :Scenario_Definition)
 
         children =
-          if background_node = ASTNode.get_child(ast_node, :Background) do
-            [background_node | scenario]
-          else
-            scenario
-          end
+          if background_node = ASTNode.get_child(ast_node, :Background),
+            do: [background_node | scenario],
+            else: scenario
 
         reject_nils(%{
           children: children,
