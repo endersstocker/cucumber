@@ -13,10 +13,9 @@ defmodule Gherkin.TokenFormatterBuilder do
 
   @spec format_token(Token.t()) :: iodata
   defp format_token(token) do
-    if Token.eof?(token) do
-      "EOF"
-    else
-      [
+    if Token.eof?(token),
+      do: "EOF",
+      else: [
         ?(,
         token.location.line,
         ?:,
@@ -30,7 +29,6 @@ defmodule Gherkin.TokenFormatterBuilder do
         ?/,
         format_items(token.matched_items)
       ]
-    end
   end
 
   @spec format_items([TableCell.t()] | [Tag.t()]) :: iolist

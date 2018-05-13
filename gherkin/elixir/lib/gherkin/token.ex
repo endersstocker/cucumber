@@ -4,7 +4,7 @@ defmodule Gherkin.Token do
   @type t :: %__MODULE__{
           line: GherkinLine.t(),
           location: Location.t(),
-          matched_gherkin_dialect: String.t(),
+          matched_gherkin_dialect: String.t() | nil,
           matched_indent: non_neg_integer,
           matched_items: [TableCell.t()] | [Tag.t()],
           matched_keyword: String.t() | nil,
